@@ -18,11 +18,12 @@ from pathlib import Path
 
 LLAMA_BENCH = Path("BONUS-llama-cpp-optimization/llama.cpp/build/bin/llama-bench")
 LLAMA_BENCH_EXE = LLAMA_BENCH.with_suffix(".exe")
-TG_RE = re.compile(r"\|\s*tg128\s*\|\s*([0-9.]+)\s*±")
+LLAMA_BENCH_MSVC = Path("BONUS-llama-cpp-optimization/llama.cpp/build/bin/Release/llama-bench.exe")
+TG_RE = re.compile(r"\|\s*tg\d+\s*\|\s*([0-9.]+)\s*(?:±|\\+/-|Â±)")
 
 
 def find_bench() -> Path:
-    for p in (LLAMA_BENCH, LLAMA_BENCH_EXE):
+    for p in (LLAMA_BENCH, LLAMA_BENCH_EXE, LLAMA_BENCH_MSVC):
         if p.exists():
             return p
     print("ERROR: build llama.cpp first.", file=sys.stderr)
@@ -53,11 +54,11 @@ def main() -> int:
         m = TG_RE.search(out)
         tps = float(m.group(1)) if m else 0.0
         rows.append({"ngl": ngl, "tok_s": tps})
-        print(f"   -ngl {ngl:3d}  tg128={tps:6.1f} tok/s")
+        print(f"   -ngl {ngl:3d}  tg64={tps:6.1f} tok/s")
 
     md = "# Bonus — GPU-offload sweep\n\n"
     md += f"Model: `{Path(model).name}`  ·  threads: `{threads}`\n\n"
-    md += "| -ngl | tg128 (tok/s) |\n|--:|--:|\n"
+    md += "| -ngl | tg64 (tok/s) |\n|--:|--:|\n"
     md += "\n".join(f"| {r['ngl']} | {r['tok_s']:.1f} |" for r in rows)
     md += (
         "\n\nWhen the model fits in VRAM, `-ngl 99` (full offload) is fastest. "

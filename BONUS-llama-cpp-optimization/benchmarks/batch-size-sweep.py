@@ -19,11 +19,12 @@ from pathlib import Path
 
 LLAMA_BENCH = Path("BONUS-llama-cpp-optimization/llama.cpp/build/bin/llama-bench")
 LLAMA_BENCH_EXE = LLAMA_BENCH.with_suffix(".exe")
-PP_RE = re.compile(r"\|\s*pp(\d+)\s*\|\s*([0-9.]+)\s*±")
+LLAMA_BENCH_MSVC = Path("BONUS-llama-cpp-optimization/llama.cpp/build/bin/Release/llama-bench.exe")
+PP_RE = re.compile(r"\|\s*pp(\d+)\s*\|\s*([0-9.]+)\s*(?:±|\\+/-|Â±)")
 
 
 def find_bench() -> Path:
-    for p in (LLAMA_BENCH, LLAMA_BENCH_EXE):
+    for p in (LLAMA_BENCH, LLAMA_BENCH_EXE, LLAMA_BENCH_MSVC):
         if p.exists():
             return p
     print("ERROR: build llama.cpp first.", file=sys.stderr)

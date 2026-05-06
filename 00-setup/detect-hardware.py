@@ -13,6 +13,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import ctypes
 from pathlib import Path
 
 
@@ -61,9 +62,59 @@ def detect_cpu() -> dict:
                 elif line.startswith("NumberOfCores="):
                     val = line.split("=", 1)[1].strip()
                     info["cores_physical"] = int(val) if val.isdigit() else None
+        if not info.get("model") or info.get("model") == "unknown":
+            info["model"] = windows_cpu_model_from_registry()
+        if not info.get("cores_physical"):
+            info["cores_physical"] = windows_physical_core_count() or info["cores_logical"]
     info.setdefault("model", "unknown")
     info.setdefault("cores_physical", info["cores_logical"])
     return info
+
+
+def windows_cpu_model_from_registry() -> str:
+    try:
+        import winreg
+
+        key_path = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+            value, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+            return str(value).strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+def windows_physical_core_count() -> int | None:
+    """Count physical CPU cores without WMI, which may be unavailable on Windows."""
+    if sys.platform != "win32":
+        return None
+
+    relation_processor_core = 0
+    error_insufficient_buffer = 122
+    length = ctypes.c_ulong(0)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+    ok = kernel32.GetLogicalProcessorInformationEx(
+        relation_processor_core, None, ctypes.byref(length)
+    )
+    if ok or ctypes.get_last_error() != error_insufficient_buffer:
+        return None
+
+    buffer = ctypes.create_string_buffer(length.value)
+    ok = kernel32.GetLogicalProcessorInformationEx(
+        relation_processor_core, ctypes.byref(buffer), ctypes.byref(length)
+    )
+    if not ok:
+        return None
+
+    offset = 0
+    count = 0
+    while offset + 8 <= length.value:
+        size = int.from_bytes(buffer.raw[offset + 4 : offset + 8], "little")
+        if size <= 0:
+            return count or None
+        count += 1
+        offset += size
+    return count or None
 
 
 def detect_ram_gb() -> float:
@@ -86,7 +137,32 @@ def detect_ram_gb() -> float:
                 val = line.split("=", 1)[1].strip()
                 if val.isdigit():
                     return round(int(val) / 1024**3, 1)
+        return windows_total_ram_gb()
     return 0.0
+
+
+def windows_total_ram_gb() -> float:
+    if sys.platform != "win32":
+        return 0.0
+
+    class MemoryStatusEx(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong),
+            ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    status = MemoryStatusEx()
+    status.dwLength = ctypes.sizeof(status)
+    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+        return 0.0
+    return round(status.ullTotalPhys / 1024**3, 1)
 
 
 def detect_gpu() -> dict:

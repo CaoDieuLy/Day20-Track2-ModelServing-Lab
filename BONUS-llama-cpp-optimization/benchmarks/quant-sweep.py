@@ -69,11 +69,12 @@ TIERS: dict[str, dict] = {
 
 LLAMA_BENCH = Path("BONUS-llama-cpp-optimization/llama.cpp/build/bin/llama-bench")
 LLAMA_BENCH_EXE = LLAMA_BENCH.with_suffix(".exe")
-TG_RE = re.compile(r"\|\s*tg128\s*\|\s*([0-9.]+)\s*±")
+LLAMA_BENCH_MSVC = Path("BONUS-llama-cpp-optimization/llama.cpp/build/bin/Release/llama-bench.exe")
+TG_RE = re.compile(r"\|\s*tg\d+\s*\|\s*([0-9.]+)\s*(?:±|\\+/-|Â±)")
 
 
 def find_bench() -> Path:
-    for p in (LLAMA_BENCH, LLAMA_BENCH_EXE):
+    for p in (LLAMA_BENCH, LLAMA_BENCH_EXE, LLAMA_BENCH_MSVC):
         if p.exists():
             return p
     print("ERROR: build llama.cpp first.", file=sys.stderr)
@@ -128,14 +129,14 @@ def main() -> int:
         size_mb = path.stat().st_size / 1024 / 1024
         tps = run_bench(bench, path, threads, n_gpu)
         rows.append({"quant": label, "size_mb": round(size_mb, 1), "tok_s": tps})
-        print(f"   {label:6s}  size={size_mb:6.1f} MB   tg128={tps:6.1f} tok/s")
+        print(f"   {label:6s}  size={size_mb:6.1f} MB   tg64={tps:6.1f} tok/s")
 
     if not rows:
         return 1
 
     md = "# Bonus — Quantization sweep\n\n"
     md += f"Tier: `{tier_key}`  ·  threads: `{threads}`  ·  n_gpu_layers: `{n_gpu}`\n\n"
-    md += "| quant | size (MB) | tg128 (tok/s) |\n|:--|--:|--:|\n"
+    md += "| quant | size (MB) | tg64 (tok/s) |\n|:--|--:|--:|\n"
     md += "\n".join(f"| {r['quant']} | {r['size_mb']:.1f} | {r['tok_s']:.1f} |" for r in rows)
     md += "\n\n"
     md += (

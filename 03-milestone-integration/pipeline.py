@@ -8,12 +8,16 @@ in your real lakehouse + vector store.
 from __future__ import annotations
 
 import time
+import re
 from dataclasses import dataclass
 from typing import Iterable
 
 import httpx
 
 LLAMA_SERVER_BASE = "http://localhost:8080/v1"
+VECTOR_STORE_URL = "stub://in-memory-toy-docs"
+FEAST_REPO_PATH = "stub://not-used-for-this-local-demo"
+LAKEHOUSE_SOURCE = "stub://TOY_DOCS"
 SYSTEM_PROMPT = (
     "You are a serving-engineering tutor. Answer using only the documents provided. "
     "If the documents don't contain the answer, say so."
@@ -43,12 +47,16 @@ class Doc:
 def retrieve(query: str, k: int = 3) -> list[Doc]:
     """STUB: replace with your N19 vector index call."""
     # Toy keyword overlap so the demo does *something* sensible without an embedder.
-    q_terms = {w.lower() for w in query.split() if len(w) > 3}
+    q_terms = terms(query)
     scored = [
-        Doc(d["id"], d["text"], score=len(q_terms & {w.lower() for w in d["text"].split()}))
+        Doc(d["id"], d["text"], score=len(q_terms & terms(d["text"])))
         for d in TOY_DOCS
     ]
     return sorted(scored, key=lambda d: d.score, reverse=True)[:k]
+
+
+def terms(text: str) -> set[str]:
+    return {w.lower() for w in re.findall(r"[A-Za-z0-9]+", text) if len(w) > 3}
 
 
 # ────────────────────────────────────────────────────────────────────────
